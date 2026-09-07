@@ -44,8 +44,11 @@ class SnowflakeProxyService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         notificationChannelId = createNotificationChannel()
         snowflakeProxyWrapper = SnowflakeProxyWrapper(this)
+        snowflakeProxyWrapper.releaseStalePorts()
+        KindnessWatchdogWorker.schedule(this)
         powerConnectionReceiver = PowerConnectionReceiver(this)
         regionChangedObserver =
             SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
@@ -181,6 +184,7 @@ class SnowflakeProxyService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
         unregisterReceiver(powerConnectionReceiver)
         val connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
         PreferenceManager.getDefaultSharedPreferences(this)
@@ -194,6 +198,12 @@ class SnowflakeProxyService : Service() {
         private const val NOTIFICATION_ID = 103
         private const val CHANNEL_ID = "snowflake"
         private const val ACTION_STOP_SNOWFLAKE_SERVICE = "ACTION_STOP_SNOWFLAKE_SERVICE"
+
+        // Read by the watchdog to tell "off because the user said so" apart
+        // from "off because the system killed us" (#1799, #1783).
+        @Volatile
+        var isRunning = false
+            private set
 
         private fun getIntent(context: Context) = Intent(context, SnowflakeProxyService::class.java)
 
