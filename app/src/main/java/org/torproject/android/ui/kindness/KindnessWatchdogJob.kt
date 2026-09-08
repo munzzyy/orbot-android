@@ -1,11 +1,11 @@
 package org.torproject.android.ui.kindness
 
+import android.app.job.JobInfo
+import android.app.job.JobParameters
+import android.app.job.JobScheduler
+import android.app.job.JobService
+import android.content.ComponentName
 import android.content.Context
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.Worker
-import androidx.work.WorkerParameters
 import org.torproject.android.Regionalization
 import org.torproject.android.util.Prefs
 import java.util.concurrent.TimeUnit
@@ -16,14 +16,12 @@ import java.util.concurrent.TimeUnit
  * restarts get throttled and eventually abandoned, and some OEMs never deliver
  * them at all, which is how Kindness Mode ends up off until somebody notices.
  */
-class KindnessWatchdogWorker(appContext: Context, workerParams: WorkerParameters) :
-    Worker(appContext, workerParams) {
+class KindnessWatchdogJob : JobService() {
 
-    override fun doWork(): Result {
+    override fun onStartJob(params: JobParameters?): Boolean {
         if (!Prefs.beSnowflakeProxy) {
-            // The user turned Kindness Mode off; nothing left to watch.
             cancel(applicationContext)
-            return Result.success()
+            return false
         }
         if (shouldRestart(
                 wantsProxy = Prefs.beSnowflakeProxy,
@@ -39,22 +37,29 @@ class KindnessWatchdogWorker(appContext: Context, workerParams: WorkerParameters
                 // watchdog run after the user grants one will pick it back up.
             }
         }
-        return Result.success()
+        return false
     }
 
+    override fun onStopJob(params: JobParameters?) = false
+
     companion object {
-        private const val WORK_NAME = "kindness_watchdog"
+        private const val JOB_ID = 4817
 
         fun shouldRestart(wantsProxy: Boolean, serviceRunning: Boolean, regionBlocked: Boolean) =
             wantsProxy && !serviceRunning && !regionBlocked
 
-        fun schedule(context: Context) = WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<KindnessWatchdogWorker>(15, TimeUnit.MINUTES).build()
-        )
+        fun schedule(context: Context) {
+            val jobScheduler =
+                context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+            val jobInfo = JobInfo.Builder(JOB_ID, ComponentName(context, KindnessWatchdogJob::class.java))
+                .setPeriodic(TimeUnit.MINUTES.toMillis(15))
+                .setPersisted(true)
+                .build()
+            jobScheduler.schedule(jobInfo)
+        }
 
-        fun cancel(context: Context) =
-            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        fun cancel(context: Context) {
+            (context.getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler).cancel(JOB_ID)
+        }
     }
 }

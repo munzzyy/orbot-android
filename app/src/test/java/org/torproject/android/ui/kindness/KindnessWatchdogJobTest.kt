@@ -4,12 +4,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class KindnessWatchdogWorkerTest {
+class KindnessWatchdogJobTest {
 
     @Test
     fun restartsWhenWantedAndDead() {
         assertTrue(
-            KindnessWatchdogWorker.shouldRestart(
+            KindnessWatchdogJob.shouldRestart(
                 wantsProxy = true, serviceRunning = false, regionBlocked = false
             )
         )
@@ -18,7 +18,7 @@ class KindnessWatchdogWorkerTest {
     @Test
     fun leavesARunningServiceAlone() {
         assertFalse(
-            KindnessWatchdogWorker.shouldRestart(
+            KindnessWatchdogJob.shouldRestart(
                 wantsProxy = true, serviceRunning = true, regionBlocked = false
             )
         )
@@ -27,7 +27,7 @@ class KindnessWatchdogWorkerTest {
     @Test
     fun respectsTheUserSayingNo() {
         assertFalse(
-            KindnessWatchdogWorker.shouldRestart(
+            KindnessWatchdogJob.shouldRestart(
                 wantsProxy = false, serviceRunning = false, regionBlocked = false
             )
         )
@@ -36,7 +36,7 @@ class KindnessWatchdogWorkerTest {
     @Test
     fun respectsARegionBlock() {
         assertFalse(
-            KindnessWatchdogWorker.shouldRestart(
+            KindnessWatchdogJob.shouldRestart(
                 wantsProxy = true, serviceRunning = false, regionBlocked = true
             )
         )
