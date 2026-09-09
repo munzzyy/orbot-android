@@ -49,7 +49,7 @@ class SnowflakeProxyService : Service() {
         powerConnectionReceiver = PowerConnectionReceiver(this)
         regionChangedObserver =
             SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
-                if (key != Prefs.PREF_BRIDGE_COUNTRY || key != Prefs.PREF_CAMO_APP_PACKAGE) return@OnSharedPreferenceChangeListener
+                if (shouldIgnoreSnowflakePreferenceChange(key)) return@OnSharedPreferenceChangeListener
                 if (key == Prefs.PREF_CAMO_APP_PACKAGE) {
                     refreshNotification()
                 } else if (Regionalization.isKindnessModeDisabledForCountry(Prefs.bridgeCountry)) {
