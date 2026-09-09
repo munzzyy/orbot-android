@@ -64,6 +64,7 @@ import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
 
+import net.freehaven.tor.control.RawEventListener;
 import net.freehaven.tor.control.TorControlCommands;
 import net.freehaven.tor.control.TorControlConnection;
 
@@ -86,6 +87,7 @@ import java.util.Locale;
 import java.util.StringTokenizer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import kotlin.Unit;
 
@@ -103,6 +105,7 @@ public class OrbotService extends VpnService {
     protected String mCurrentStatus = STATUS_OFF;
     TorControlConnection conn = null;
     private ServiceConnection torServiceConnection;
+    private final AtomicBoolean torStartRequested = new AtomicBoolean(false);
     private volatile boolean shouldUnbindTorService;
     private NotificationManager mNotificationManager = null;
     private NotificationCompat.Builder mNotifyBuilder;
@@ -232,6 +235,7 @@ public class OrbotService extends VpnService {
 
     private void stopTorOnError(String message) {
         //  stopTorAsync(false);
+        torStartRequested.set(false);
         showToolbarNotification(getString(R.string.unable_to_start_tor) + ": " + message, ERROR_NOTIFY_ID, R.drawable.ic_stat_notifyerr);
     }
 
@@ -258,6 +262,9 @@ public class OrbotService extends VpnService {
         } else {
             sendLocalStatusOffBroadcast();
         }
+
+        torServiceConnection = null;
+        torStartRequested.set(false);
     }
 
     private void requestTorRereadConfig() {
@@ -382,10 +389,13 @@ public class OrbotService extends VpnService {
 
     // The entire process for starting tor and related services is run from this method.
     private void startTor() {
-        if (torServiceConnection != null && conn != null) {
+        // conn stays null for the whole bind window, so it cannot be the re-entrancy guard
+        if (!torStartRequested.compareAndSet(false, true)) {
             Log.d(TAG, "already started, ignoring start request");
-            mNotifyBuilder.setProgress(0, 0, false);
-            showToolbarNotification(getString(R.string.status_activated), NOTIFY_ID, R.drawable.ic_stat_tor);
+            if (conn != null) {
+                mNotifyBuilder.setProgress(0, 0, false);
+                showToolbarNotification(getString(R.string.status_activated), NOTIFY_ID, R.drawable.ic_stat_tor);
+            }
             return;
         }
         mNotifyBuilder.setProgress(100, 0, false);
@@ -462,7 +472,10 @@ public class OrbotService extends VpnService {
                 """, false);
 
         var fileTorrcCustom = updateTorrcCustomFile();
-        if ((!fileTorrcCustom.exists()) || (!fileTorrcCustom.canRead())) return;
+        if ((!fileTorrcCustom.exists()) || (!fileTorrcCustom.canRead())) {
+            torStartRequested.set(false);
+            return;
+        }
 
         sendCallbackLogMessage(getString(R.string.status_starting_up));
 
@@ -486,6 +499,7 @@ public class OrbotService extends VpnService {
                     Log.e(TAG, e.toString());
                 }
 
+                var staleListener = mOrbotRawEventListener;
                 mOrbotRawEventListener = new OrbotRawEventListener(OrbotService.this);
 
                 if (conn == null) return;
@@ -494,8 +508,7 @@ public class OrbotService extends VpnService {
                     if (conn == null)
                         return; // maybe there was an error setting up the control connection
 
-                    //override the TorService event listener
-                    conn.addRawEventListener(mOrbotRawEventListener);
+                    replaceRawEventListener(conn, staleListener, mOrbotRawEventListener);
 
                     logNotice(getString(R.string.status_connected_control_port));
 
@@ -520,6 +533,16 @@ public class OrbotService extends VpnService {
             @Override
             public void onBindingDied(ComponentName componentName) {
                 Log.w(TAG, "TorService: onBindingDied");
+                // a died binding never reconnects, so release it and let the next start request through
+                if (torServiceConnection == this) {
+                    if (shouldUnbindTorService) {
+                        unbindService(this);
+                        shouldUnbindTorService = false;
+                    }
+                    conn = null;
+                    torServiceConnection = null;
+                    torStartRequested.set(false);
+                }
                 sendLocalStatusOffBroadcast();
             }
         };
@@ -530,6 +553,16 @@ public class OrbotService extends VpnService {
             shouldUnbindTorService = bindService(serviceIntent, BIND_AUTO_CREATE, mExecutor, torServiceConnection);
         else
             shouldUnbindTorService = bindService(serviceIntent, torServiceConnection, BIND_AUTO_CREATE);
+        if (!shouldUnbindTorService) {
+            torServiceConnection = null;
+            stopTorOnError("bindService failed");
+        }
+    }
+
+    // jtorctl's addRawEventListener is a plain List.add, so re-adding duplicates every event
+    static void replaceRawEventListener(TorControlConnection conn, RawEventListener staleListener, RawEventListener freshListener) {
+        if (staleListener != null) conn.removeRawEventListener(staleListener);
+        conn.addRawEventListener(freshListener);
     }
 
     private void sendLocalStatusOffBroadcast() {
