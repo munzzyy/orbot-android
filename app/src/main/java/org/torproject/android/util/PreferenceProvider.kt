@@ -106,17 +106,30 @@ class PreferenceProvider: ContentProvider() {
     }
 }
 
-private fun <T> ContentResolver.getPref(key: String, converter: (Cursor, Int) -> T?): T? {
-    val cursor = query(Uri.withAppendedPath(PreferenceProvider.CONTENT_URI, key),
-        null, null, null, null) ?: return null
-
-    cursor.use {
-        if (it.moveToFirst()) {
-            return converter(it, it.getColumnIndex(PreferenceProvider.ROW_VALUE))
-        }
+internal fun <T> preferenceProviderCall(defaultValue: T, action: () -> T): T =
+    try {
+        action()
+    } catch (_: IllegalArgumentException) {
+        defaultValue
     }
 
-    return null
+private fun <T> ContentResolver.getPref(key: String, converter: (Cursor, Int) -> T?): T? {
+    return preferenceProviderCall<T?>(null) {
+        val cursor = query(
+            Uri.withAppendedPath(PreferenceProvider.CONTENT_URI, key),
+            null, null, null, null
+        ) ?: return@preferenceProviderCall null
+
+        cursor.use {
+            if (it.moveToFirst()) {
+                return@preferenceProviderCall converter(
+                    it, it.getColumnIndex(PreferenceProvider.ROW_VALUE)
+                )
+            }
+        }
+
+        null
+    }
 }
 
 fun ContentResolver.getPrefString(key: String, default: String? = null): String? {
@@ -143,8 +156,13 @@ fun ContentResolver.getPrefFloat(key: String, default: Float? = null): Float? {
 }
 
 private fun ContentResolver.putPref(key: String, values: ContentValues) {
-    update(Uri.withAppendedPath(PreferenceProvider.CONTENT_URI, key),
-        values, null, null)
+    preferenceProviderCall(Unit) {
+        update(
+            Uri.withAppendedPath(PreferenceProvider.CONTENT_URI, key),
+            values, null, null
+        )
+        Unit
+    }
 }
 
 fun ContentResolver.putPref(key: String, value: String?) {
