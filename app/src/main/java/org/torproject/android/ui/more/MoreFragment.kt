@@ -23,6 +23,14 @@ import org.torproject.android.ui.v3onionservice.clientauth.ClientAuthActivity
 import org.torproject.android.util.StringUtils
 import org.torproject.jni.TorService
 
+internal fun proxyPortDisplayValues(
+    httpPort: Int,
+    socksPort: Int,
+    notSet: String,
+): Pair<String, String> =
+    (if (httpPort > 0) httpPort.toString() else notSet) to
+        (if (socksPort > 0) socksPort.toString() else notSet)
+
 class MoreFragment : Fragment() {
     private var httpPort = -1
     private var socksPort = -1
@@ -51,17 +59,11 @@ class MoreFragment : Fragment() {
 
         val rows = mutableListOf<String>()
 
-        rows += if (httpPort != -1 && socksPort != -1) {
-            listOf(
-                row(labelHttp, httpPort.toString()),
-                row(labelSocks, socksPort.toString())
-            )
-        } else {
-            listOf(
-                row(labelHttp, notSet),
-                row(labelSocks, notSet)
-            )
-        }
+        val (httpValue, socksValue) = proxyPortDisplayValues(httpPort, socksPort, notSet)
+        rows += listOf(
+            row(labelHttp, httpValue),
+            row(labelSocks, socksValue)
+        )
 
         val pm = requireActivity().packageManager
         val info = pm.getPackageInfo(requireActivity().packageName, 0)
