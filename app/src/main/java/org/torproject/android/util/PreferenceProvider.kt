@@ -120,7 +120,11 @@ private fun <T> ContentResolver.getPref(key: String, converter: (Cursor, Int) ->
         val cursor = query(
             Uri.withAppendedPath(PreferenceProvider.CONTENT_URI, key),
             null, null, null, null
-        ) ?: return@preferenceProviderCall null
+        )
+        if (cursor == null) {
+            Log.e(PreferenceProvider.TAG, "couldn't get a cursor when querying for pref $key")
+            return@preferenceProviderCall null
+        }
 
         cursor.use {
             if (it.moveToFirst()) {
