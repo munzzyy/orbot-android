@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.util.Log
 import androidx.core.database.getFloatOrNull
 import androidx.core.database.getIntOrNull
 import androidx.core.database.getLongOrNull
@@ -20,6 +21,7 @@ class PreferenceProvider : ContentProvider() {
 
     companion object {
         private const val AUTHORITY = "${BuildConfig.APPLICATION_ID}.provider.preferences"
+        const val TAG = "PreferenceProvider"
 
         val CONTENT_URI = "content://$AUTHORITY".toUri()
 
@@ -114,7 +116,7 @@ internal fun <T> preferenceProviderCall(defaultValue: T, action: () -> T): T =
     }
 
 private fun <T> ContentResolver.getPref(key: String, converter: (Cursor, Int) -> T?): T? {
-    return preferenceProviderCall(null) {
+    val foo = return preferenceProviderCall(null) {
         val cursor = query(
             Uri.withAppendedPath(PreferenceProvider.CONTENT_URI, key),
             null, null, null, null
@@ -130,6 +132,7 @@ private fun <T> ContentResolver.getPref(key: String, converter: (Cursor, Int) ->
 
         null
     }
+
 }
 
 fun ContentResolver.getPrefString(key: String, default: String? = null): String? {
@@ -156,12 +159,15 @@ fun ContentResolver.getPrefFloat(key: String, default: Float? = null): Float? {
 }
 
 private fun ContentResolver.putPref(key: String, values: ContentValues) {
-    preferenceProviderCall(Unit) {
+    val result: Unit? = preferenceProviderCall(null) {
         update(
             Uri.withAppendedPath(PreferenceProvider.CONTENT_URI, key),
             values, null, null
         )
         Unit
+    }
+    if (result == null) {
+        Log.e(PreferenceProvider.TAG, "Couldn't update preference $key")
     }
 }
 
