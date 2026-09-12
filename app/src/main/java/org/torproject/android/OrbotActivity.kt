@@ -44,8 +44,8 @@ class OrbotActivity : BaseActivity() {
 
     private var lastNavMenuIndex = -1
 
-    var portSocks: Int = -1
-    var portHttp: Int = -1
+    var portSocks: Int = PORT_NOT_SET_VALUE
+    var portHttp: Int = PORT_NOT_SET_VALUE
 
     // used to hide UI while password isn't obtained
     private var rootLayout: View? = null
@@ -70,8 +70,8 @@ class OrbotActivity : BaseActivity() {
         // programmatically set title to "Orbot" since camo mode will overwrite it here from manifest
         title = getString(R.string.app_name)
         savedInstanceState?.let {
-            portSocks = it.getInt(BUNDLE_KEY_SOCKS, -1)
-            portHttp = it.getInt(BUNDLE_KEY_HTTP, -1)
+            portSocks = it.getInt(BUNDLE_KEY_SOCKS, PORT_NOT_SET_VALUE)
+            portHttp = it.getInt(BUNDLE_KEY_HTTP, PORT_NOT_SET_VALUE)
         }
         try {
             createOrbot()
@@ -347,5 +347,8 @@ class OrbotActivity : BaseActivity() {
 
         // Make sure this is only shown once per app-start, not on every device rotation.
         private var rootDetectionShown = false
+
+        // default values for HTTP/SOCKS ports, see #1812
+        const val PORT_NOT_SET_VALUE = -1
     }
 }
