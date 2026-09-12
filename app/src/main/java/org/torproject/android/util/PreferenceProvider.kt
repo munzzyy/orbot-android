@@ -116,7 +116,7 @@ internal fun <T> preferenceProviderCall(defaultValue: T, action: () -> T): T =
     }
 
 private fun <T> ContentResolver.getPref(key: String, converter: (Cursor, Int) -> T?): T? {
-    val foo = return preferenceProviderCall(null) {
+    return preferenceProviderCall(null) {
         val cursor = query(
             Uri.withAppendedPath(PreferenceProvider.CONTENT_URI, key),
             null, null, null, null
