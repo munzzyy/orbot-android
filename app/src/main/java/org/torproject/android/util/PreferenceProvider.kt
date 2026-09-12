@@ -16,7 +16,7 @@ import androidx.core.net.toUri
 import androidx.preference.PreferenceManager
 import org.torproject.android.BuildConfig
 
-class PreferenceProvider: ContentProvider() {
+class PreferenceProvider : ContentProvider() {
 
     companion object {
         private const val AUTHORITY = "${BuildConfig.APPLICATION_ID}.provider.preferences"
@@ -114,7 +114,7 @@ internal fun <T> preferenceProviderCall(defaultValue: T, action: () -> T): T =
     }
 
 private fun <T> ContentResolver.getPref(key: String, converter: (Cursor, Int) -> T?): T? {
-    return preferenceProviderCall<T?>(null) {
+    return preferenceProviderCall(null) {
         val cursor = query(
             Uri.withAppendedPath(PreferenceProvider.CONTENT_URI, key),
             null, null, null, null
