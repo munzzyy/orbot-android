@@ -60,6 +60,7 @@ import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
@@ -96,25 +97,29 @@ public class OrbotService extends VpnService {
 
     static final int NOTIFY_ID = 1, ERROR_NOTIFY_ID = 3;
     public static int mPortSOCKS = -1, mPortHTTP = -1, mPortDns = -1, mPortTrans = -1;
+    @Nullable
     public static File appBinHome, appCacheHome;
     protected final ExecutorService mExecutor = Executors.newCachedThreadPool();
     OrbotRawEventListener mOrbotRawEventListener;
     OrbotVpnManager mVpnManager;
     Handler mHandler;
     ActionBroadcastReceiver mActionBroadcastReceiver;
-    protected String mCurrentStatus = STATUS_OFF;
+    protected String mCurrentStatus = STATUS_OFF; // TODO: find out if this can safely be @NonNull
     TorControlConnection conn = null;
-    private ServiceConnection torServiceConnection;
+    @Nullable
+    protected ServiceConnection torServiceConnection;
 
     // introduced in https://github.com/guardianproject/orbot-android/pull/1809
-    private final AtomicBoolean torStartRequested = new AtomicBoolean(false);
+    protected final AtomicBoolean torStartRequested = new AtomicBoolean(false);
 
-    private volatile boolean shouldUnbindTorService;
+    protected volatile boolean shouldUnbindTorService;
     private NotificationManager mNotificationManager = null;
-    private NotificationCompat.Builder mNotifyBuilder;
+    @Nullable
+    protected NotificationCompat.Builder mNotifyBuilder;
     private static final String TAG = "OrbotService";
 
-    protected void showToolbarNotification(String notifyMsg, int notifyType, int icon) {
+    @SuppressLint("InlinedApi") // - suppresses FOREGROUND_SERVICE_EXEMPTED constant below
+    protected void showToolbarNotification(@Nullable String notifyMsg, int notifyType, int icon) {
         var intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
         var pendIntent = PendingIntent.getActivity(OrbotService.this, 0, intent, PendingIntent.FLAG_IMMUTABLE);
 
@@ -167,7 +172,7 @@ public class OrbotService extends VpnService {
         ServiceCompat.startForeground(this, NOTIFY_ID, mNotifyBuilder.build(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED);
     }
 
-    public int onStartCommand(Intent intent, int flags, int startId) {
+    public int onStartCommand(@Nullable Intent intent, int flags, int startId) {
         try {
             if (intent == null) {
                 Log.d(TAG, "Got null onStartCommand() intent");
@@ -212,14 +217,14 @@ public class OrbotService extends VpnService {
         super.onDestroy();
     }
 
-    private void stopTorAsync(boolean showNotification) {
+    protected void stopTorAsync(boolean showNotification) {
         Log.d(TAG, "stopTorAsync");
         if (showNotification) sendCallbackLogMessage(getString(R.string.status_shutting_down));
         Prefs.getTransport().stop();
         stopTor();
 
         //stop the foreground priority and make sure to remove the persistent notification
-        stopForeground(!showNotification);
+        stopForeground(!showNotification ? STOP_FOREGROUND_REMOVE : STOP_FOREGROUND_DETACH);
         if (showNotification) sendCallbackLogMessage(getString(R.string.status_disabled));
 
         mPortDns = -1;
@@ -242,7 +247,7 @@ public class OrbotService extends VpnService {
     }
 
     // if someone stops during startup, we may have to wait for the conn port to be setup, so we can properly shutdown tor
-    private void stopTor() {
+    protected void stopTor() {
 
         if (conn != null) {
             try {
@@ -269,7 +274,7 @@ public class OrbotService extends VpnService {
         torStartRequested.set(false);
     }
 
-    private void requestTorRereadConfig() {
+    protected void requestTorRereadConfig() {
         try {
             if (conn == null) return;
             conn.signal(TorControlCommands.SIGNAL_RELOAD);
@@ -278,7 +283,7 @@ public class OrbotService extends VpnService {
         }
     }
 
-    protected void logNotice(String msg) {
+    protected void logNotice(@Nullable String msg) {
         if (msg != null && !msg.trim().isEmpty()) {
             Log.d(TAG, msg);
             sendCallbackLogMessage(msg);
@@ -339,13 +344,13 @@ public class OrbotService extends VpnService {
         }
     }
 
-    private void configLanguage() {
+    protected void configLanguage() {
         var config = getApplicationContext().getResources().getConfiguration();
         Prefs.setContext(getApplicationContext());
-        var locale = new Locale.Builder().setLanguage(Prefs.getDefaultLocale()).build();
+        final var locale = new Locale.Builder().setLanguage(Prefs.getDefaultLocale()).build();
         Locale.setDefault(locale);
         config.setLocale(locale);
-        getBaseContext().getResources().updateConfiguration(config, getBaseContext().getResources().getDisplayMetrics());
+        getBaseContext().createConfigurationContext(config);
     }
 
     @NonNull
@@ -366,7 +371,7 @@ public class OrbotService extends VpnService {
      * initial request. If the user has disabled auto-starts, the reply ACTION_START Intent will
      * include the Intent extra STATUS_STARTS_DISABLED
      */
-    private void replyWithStatus(Intent startRequest) {
+    protected void replyWithStatus(@NonNull Intent startRequest) {
         String packageName = startRequest.getStringExtra(EXTRA_PACKAGE_NAME);
         Intent reply = new Intent(ACTION_STATUS)
                 .putExtra(EXTRA_STATUS, mCurrentStatus)
@@ -387,20 +392,20 @@ public class OrbotService extends VpnService {
             sendCallbackPorts(mPortSOCKS, mPortHTTP, mPortDns, mPortTrans);
     }
 
-    private boolean showTorServiceErrorMsg = false;
+    boolean showTorServiceErrorMsg = false;
 
     // The entire process for starting tor and related services is run from this method.
-    private void startTor() {
+    protected void startTor() {
         // conn stays null for the whole bind window, so it cannot be the re-entrancy guard
         if (!torStartRequested.compareAndSet(false, true)) {
             Log.d(TAG, "already started, ignoring start request");
             if (conn != null) {
-                mNotifyBuilder.setProgress(0, 0, false);
+                if (mNotifyBuilder != null) mNotifyBuilder.setProgress(0, 0, false);
                 showToolbarNotification(getString(R.string.status_activated), NOTIFY_ID, R.drawable.ic_stat_tor);
             }
             return;
         }
-        mNotifyBuilder.setProgress(100, 0, false);
+        if (mNotifyBuilder != null) mNotifyBuilder.setProgress(100, 0, false);
         showToolbarNotification("", NOTIFY_ID, R.drawable.ic_stat_tor);
 
         SmartConnect.handle(this,
@@ -418,13 +423,11 @@ public class OrbotService extends VpnService {
                 /* reconfigure: () -> Boolean */
                 () -> {
                     if (conn == null) return false;
-
                     try {
                         conn.resetConf(Arrays.asList("UseBridges", "ClientTransportPlugin", "Bridge"));
                         conn.setConf(Prefs.getTransport().getTorConfig(this));
                     } catch (IOException e) {
                         logNotice(e.getLocalizedMessage());
-
                         return false;
                     }
 
@@ -435,8 +438,6 @@ public class OrbotService extends VpnService {
                     if (e != null) {
                         logNotice(getString(R.string.unable_to_start_tor) + " " + e.getLocalizedMessage());
                         stopTorOnError(e.getLocalizedMessage());
-                    } else {
-                        //     stopTorAsync(true);
                     }
 
                     return Unit.INSTANCE;
@@ -452,7 +453,7 @@ public class OrbotService extends VpnService {
                 });
     }
 
-    private void updateV3OnionNames() {
+    protected void updateV3OnionNames() {
         OnionServiceColumns.updateV3OnionNames(this, OnionServiceColumns.createV3OnionDir(this));
         // This old status hack is temporary and fixes the issue reported by syphyr at
         // https://github.com/guardianproject/orbot/pull/556
@@ -571,13 +572,13 @@ public class OrbotService extends VpnService {
         conn.addRawEventListener(freshListener);
     }
 
-    private void sendLocalStatusOffBroadcast() {
+    protected void sendLocalStatusOffBroadcast() {
         sendBroadcast(new Intent(LOCAL_ACTION_STATUS)
                 .putExtra(EXTRA_STATUS, STATUS_OFF)
                 .setPackage(getPackageName()));
     }
 
-    private void initControlConnection() {
+    protected void initControlConnection() {
         if (conn == null) return;
         try {
             var confSocks = conn.getInfo("net/listeners/socks");
@@ -641,7 +642,7 @@ public class OrbotService extends VpnService {
             public void run() {
                 try {
                     if (conn != null && STATUS_ON.equals(mCurrentStatus)) {
-                        mNotifyBuilder.setSubText(null); // clear previous exit node info if present
+                        setNotificationSubtext(null);
                         showToolbarNotification(getString(R.string.newnym), NOTIFY_ID, R.drawable.ic_stat_tor);
                         if (showToast) {
                             var handler = new Handler(getMainLooper());
@@ -673,7 +674,8 @@ public class OrbotService extends VpnService {
                         var progress = Integer.parseInt(arr[0].trim());
                         localIntent.putExtra(LOCAL_EXTRA_BOOTSTRAP_PERCENT, "" + progress);
                         SmartConnect.updateProgress(progress);
-                        mNotifyBuilder.setProgress(100, progress, false);
+                        if (mNotifyBuilder != null)
+                            mNotifyBuilder.setProgress(100, progress, false);
                     } catch (NumberFormatException _) {
                     }
                 }
@@ -683,7 +685,7 @@ public class OrbotService extends VpnService {
         mHandler.post(() -> sendBroadcast(localIntent));
     }
 
-    private void sendCallbackPorts(int socksPort, int httpPort, int dnsPort, int transPort) {
+    protected void sendCallbackPorts(int socksPort, int httpPort, int dnsPort, int transPort) {
         var intent = new Intent(LOCAL_ACTION_PORTS)
                 .putExtra(EXTRA_SOCKS_PROXY_PORT, socksPort)
                 .putExtra(EXTRA_HTTP_PROXY_PORT, httpPort)
@@ -702,7 +704,7 @@ public class OrbotService extends VpnService {
         showToolbarNotification(message, NOTIFY_ID, icon);
     }
 
-    public void setNotificationSubtext(String message) {
+    public void setNotificationSubtext(@Nullable String message) {
         if (mNotifyBuilder != null)
             mNotifyBuilder.setSubText(message);
     }
@@ -722,7 +724,7 @@ public class OrbotService extends VpnService {
         super.onRevoke(); // invokes stopSelf()
     }
 
-    private void setExitNode(String newExits) {
+    protected void setExitNode(@Nullable String newExits) {
         if (TextUtils.isEmpty(newExits)) {
             Prefs.setExitNodes("");
 
@@ -821,7 +823,7 @@ public class OrbotService extends VpnService {
         }
     }
 
-    private class ActionBroadcastReceiver extends BroadcastReceiver {
+    protected class ActionBroadcastReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
             var action = intent.getAction();
