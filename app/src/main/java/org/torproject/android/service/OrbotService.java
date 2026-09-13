@@ -259,7 +259,7 @@ public class OrbotService extends VpnService {
         if (shouldUnbindTorService) {
             Log.d(TAG, "unbinding tor service");
             unbindService(torServiceConnection); //unbinding from the tor service will stop tor
-            shouldUnbindTorService = false;
+            shouldUnbindTorService = false; // added in #1809, fixes #1404
             conn = null;
         } else {
             sendLocalStatusOffBroadcast();
