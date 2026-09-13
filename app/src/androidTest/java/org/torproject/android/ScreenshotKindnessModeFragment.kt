@@ -23,7 +23,7 @@ class ScreenshotKindnessModeFragment : BaseScreenshotTest() {
     fun setupPrefs() {
 
         repeat(5) { Prefs.addSnowflakeServed() }
-        Prefs.refreshWeeklyServedIfNeeded()
+        Prefs.refreshWeeklyServedIfNeeded(clearAllWeeklyOverride = true)
         repeat(5) { Prefs.addSnowflakeServed() }
         Prefs.bridgeCountry = ""
         Prefs.snowflakeNeedsQualityCheck = false

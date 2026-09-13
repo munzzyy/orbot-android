@@ -39,7 +39,7 @@ object Prefs {
 
     private const val PREF_SNOWFLAKES_SERVED_COUNT = "pref_snowflakes_served"
     private const val PREF_SNOWFLAKES_SERVED_COUNT_WEEKLY = "pref_snowflakes_served_weekly"
-    private const val PREF_SNOWFLAKES_SERVED_WEEK = "pref_snowflakes_served_week"
+    private const val PREF_SNOWFLAKES_SERVED_WEEK_TIMESTAMP = "pref_snowflakes_served_week"
 
     private const val PREF_CURRENT_VERSION = "pref_current_version"
 
@@ -258,11 +258,13 @@ object Prefs {
         cr?.putPref(PREF_SNOWFLAKES_SERVED_COUNT_WEEKLY, snowflakesServedWeekly + 1)
     }
 
-    fun refreshWeeklyServedIfNeeded() {
+    fun refreshWeeklyServedIfNeeded(clearAllWeeklyOverride: Boolean = false) {
         val week = System.currentTimeMillis().milliseconds.inWholeDays.div(7).toInt()
-        if ((cr?.getPrefInt(PREF_SNOWFLAKES_SERVED_WEEK) ?: 0) != week) {
+        if (clearAllWeeklyOverride || (cr?.getPrefInt(PREF_SNOWFLAKES_SERVED_WEEK_TIMESTAMP)
+                ?: 0) != week
+        ) {
             cr?.putPref(PREF_SNOWFLAKES_SERVED_COUNT_WEEKLY, 0)
-            cr?.putPref(PREF_SNOWFLAKES_SERVED_WEEK, week)
+            cr?.putPref(PREF_SNOWFLAKES_SERVED_WEEK_TIMESTAMP, week)
         }
     }
 
