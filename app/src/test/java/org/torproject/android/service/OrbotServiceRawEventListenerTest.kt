@@ -12,6 +12,8 @@ import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+// related to Bug https://github.com/guardianproject/orbot-android/pull/1404
+// related to PR  https://github.com/guardianproject/orbot-android/pull/1809
 class OrbotServiceRawEventListenerTest {
 
     private fun connectionOver(feed: PipedOutputStream) =

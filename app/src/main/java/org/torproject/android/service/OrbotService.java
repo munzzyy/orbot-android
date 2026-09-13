@@ -105,7 +105,10 @@ public class OrbotService extends VpnService {
     protected String mCurrentStatus = STATUS_OFF;
     TorControlConnection conn = null;
     private ServiceConnection torServiceConnection;
+
+    // introduced in https://github.com/guardianproject/orbot-android/pull/1809
     private final AtomicBoolean torStartRequested = new AtomicBoolean(false);
+
     private volatile boolean shouldUnbindTorService;
     private NotificationManager mNotificationManager = null;
     private NotificationCompat.Builder mNotifyBuilder;
@@ -234,7 +237,6 @@ public class OrbotService extends VpnService {
     }
 
     private void stopTorOnError(String message) {
-        //  stopTorAsync(false);
         torStartRequested.set(false);
         showToolbarNotification(getString(R.string.unable_to_start_tor) + ": " + message, ERROR_NOTIFY_ID, R.drawable.ic_stat_notifyerr);
     }
@@ -554,12 +556,16 @@ public class OrbotService extends VpnService {
         else
             shouldUnbindTorService = bindService(serviceIntent, torServiceConnection, BIND_AUTO_CREATE);
         if (!shouldUnbindTorService) {
-            torServiceConnection = null;
+            if (torServiceConnection != null) {
+                unbindService(torServiceConnection);
+                torServiceConnection = null;
+            }
             stopTorOnError("bindService failed");
         }
     }
 
     // jtorctl's addRawEventListener is a plain List.add, so re-adding duplicates every event
+    // TODO - would be nice to just merge jtorctl into tor-android, and update this - @bitmold
     static void replaceRawEventListener(TorControlConnection conn, RawEventListener staleListener, RawEventListener freshListener) {
         if (staleListener != null) conn.removeRawEventListener(staleListener);
         conn.addRawEventListener(freshListener);
