@@ -32,8 +32,6 @@ class SnowflakeProxyService : Service() {
     private lateinit var snowflakeProxyWrapper: SnowflakeProxyWrapper
     private lateinit var powerConnectionReceiver: PowerConnectionReceiver
     private lateinit var regionChangedObserver: SharedPreferences.OnSharedPreferenceChangeListener
-    private lateinit var notificationChannelId: String
-
 
     private lateinit var networkCallbacks: ConnectivityManager.NetworkCallback
 
@@ -44,11 +42,11 @@ class SnowflakeProxyService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        notificationChannelId = createNotificationChannel()
+        createNotificationChannel()
         snowflakeProxyWrapper = SnowflakeProxyWrapper(this)
         powerConnectionReceiver = PowerConnectionReceiver(this)
         regionChangedObserver =
-            SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+            SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
                 if (shouldIgnoreSnowflakePreferenceChange(key)) return@OnSharedPreferenceChangeListener
                 if (key == Prefs.PREF_CAMO_APP_PACKAGE) {
                     refreshNotification()
@@ -91,7 +89,7 @@ class SnowflakeProxyService : Service() {
         val pendingActivityIntent =
             PendingIntent.getActivity(this, 0, activityIntent, PendingIntent.FLAG_IMMUTABLE)
         val notificationBuilder =
-            NotificationCompat.Builder(this, notificationChannelId).setSmallIcon(icon)
+            NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(icon)
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE).setContentTitle(title)
                 .setContentIntent(pendingActivityIntent).setContentText(
@@ -148,20 +146,21 @@ class SnowflakeProxyService : Service() {
         // when proxying is limited to Wi-Fi.
         if (Prefs.limitSnowflakeProxyingWifi()) {
             connectivityManager.registerNetworkCallback(
-                NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    .addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), networkCallbacks
+                NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                    .build(), networkCallbacks
             )
         } else {
             connectivityManager.registerDefaultNetworkCallback(networkCallbacks)
         }
     }
 
-    private fun createNotificationChannel(): String {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return ""
-        val channel = Notifications.createCamoflaugeableNotificationChannel(
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        Notifications.createCamoflaugeableNotificationChannel(
             this, CHANNEL_ID, R.string.volunteer_mode
         )
-        return CHANNEL_ID
     }
 
 
